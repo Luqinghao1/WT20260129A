@@ -4,8 +4,7 @@
  * 功能描述:
  * 1. 定义模型类型枚举 (ModelType) 和曲线数据类型 (ModelCurveData)。
  * 2. 声明纯数学计算逻辑，包括拉普拉斯变换、贝塞尔函数计算、Stehfest 数值反演等。
- * 3. 实现了根据 MATLAB (modelwidget1A.m) 更新的双重介质数学模型。
- * 4. 负责将输入的有因次物理参数转换为无因次量进行计算。
+ * 3. 不依赖任何 UI 控件，仅负责数据输入与结果输出。
  */
 
 #ifndef MODELSOLVER01_06_H
@@ -41,7 +40,6 @@ public:
     void setHighPrecision(bool high);
 
     // 核心计算接口：根据参数和时间序列计算理论曲线
-    // params 包含有因次物理参数 (kf, M12, L, rm, re, eta12, remda2 等)
     ModelCurveData calculateTheoreticalCurve(const QMap<QString, double>& params, const QVector<double>& providedTime = QVector<double>());
 
     // 获取模型名称（静态辅助函数）
@@ -56,10 +54,10 @@ private:
                              std::function<double(double, const QMap<QString, double>&)> laplaceFunc,
                              QVector<double>& outPD, QVector<double>& outDeriv);
 
-    // 拉普拉斯空间下的复合模型函数 (更新为 modelwidget1A.m 逻辑)
+    // 拉普拉斯空间下的复合模型函数 (更新: 支持 M12, omga2, remda2, eta12)
     double flaplace_composite(double z, const QMap<QString, double>& p);
 
-    // 计算点源解的拉普拉斯变换值 (核心算法)
+    // 计算点源解的拉普拉斯变换值
     double PWD_composite(double z, double fs1, double fs2, double M12, double LfD, double rmD, double reD, int nf, const QVector<double>& xwD, ModelType type);
 
     // 数学辅助函数

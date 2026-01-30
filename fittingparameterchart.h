@@ -59,7 +59,7 @@ public:
     // 刷新表格显示
     void refreshParamTable();
 
-    // 静态辅助：获取参数显示信息
+    // 静态辅助：获取参数显示信息 (名称, 符号, 单位等)
     static void getParamDisplayInfo(const QString& name, QString& chName, QString& symbol, QString& uniSymbol, QString& unit);
 
 signals:

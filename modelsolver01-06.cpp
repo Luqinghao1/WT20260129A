@@ -2,10 +2,11 @@
  * modelsolver01-06.cpp
  * 文件作用: 压裂水平井复合页岩油模型核心计算类实现
  * 功能描述:
- * 1. 实现6种不同边界和井储条件组合的页岩油数学模型解。
- * 2. 算法核心基于 modelwidget1A.m 更新，支持流度比(M12)、导压系数比(eta12)及外区双孔介质(remda2)。
- * 3. 内部自动进行参数无因次化处理 (Lf/L -> LfD, rm/L -> rmD, re/L -> reD)。
- * 4. 包含 Stehfest 数值反演算法、自适应高斯积分、Bessel 函数调用等核心算法。
+ * 1. 实现6种不同边界和井储条件组合的页岩油数学模型解 (基于 modelwidget1A-6A.m 更新)。
+ * 2. 包含 Stehfest 数值反演算法、自适应高斯积分、Bessel 函数调用等核心算法。
+ * 3. 实现了数据处理和物理量到无因次量的转换逻辑。
+ * 4. [更新] 输入改为有因次参数，内部自动处理无因次化。
+ * 5. [更新] 引入流度比 M12，取消外区渗透率 km；增加外区双重介质参数 (omga2, remda2, eta12)。
  */
 
 #include "modelsolver01-06.h"
@@ -82,11 +83,12 @@ ModelCurveData ModelSolver01_06::calculateTheoreticalCurve(const QMap<QString, d
     double Ct = params.value("Ct", 5e-4);
     double q = params.value("q", 5.0);
     double h = params.value("h", 20.0);
-    double kf = params.value("kf", 1e-3); // 内区渗透率
+    double kf = params.value("kf", 1e-3); // 内区渗透率 x(1)
     double L = params.value("L", 1000.0);
 
     // 3. 计算无因次时间 tD
     // 公式: tD = 14.4 * kf * t / (phi * mu * Ct * L^2)
+    // 对应 MATLAB: tD = 14.4*kf*t/(phi*mu*Ct*L^2);
     double td_coeff = 14.4 * kf / (phi * mu * Ct * pow(L, 2));
 
     QVector<double> tD_vec;
@@ -102,7 +104,7 @@ ModelCurveData ModelSolver01_06::calculateTheoreticalCurve(const QMap<QString, d
     calculatePDandDeriv(tD_vec, params, func, PD_vec, Deriv_vec);
 
     // 5. 将无因次量转换为物理量 (压差 dp)
-    // dp = 1.842e-3 * q * mu * B / (kf * h) * pD
+    // MATLAB: Dp = 1.842e-3*q*mu*B*PD/(kf*h);
     double p_coeff = 1.842e-3 * q * mu * B / (kf * h);
 
     QVector<double> finalP(tPoints.size()), finalDP(tPoints.size());
@@ -163,30 +165,33 @@ void ModelSolver01_06::calculatePDandDeriv(const QVector<double>& tD, const QMap
 
 // 拉普拉斯空间下的复合模型总函数 (包含井储和表皮)
 double ModelSolver01_06::flaplace_composite(double z, const QMap<QString, double>& p) {
-    // 提取有因次参数
-    double L = p.value("L");
-    double Lf = p.value("Lf");
-    double rm = p.value("rm"); // 改造半径 (m)
-    double re = p.value("re"); // 外边界半径 (m)
+    // 参数读取
+    // double kf = p.value("kf"); // kf 在 calculateTheoreticalCurve 中用于 tD 转换，此处主要用到 M12
 
-    // 计算无因次参数 (程序内部归一化)
+    double M12 = p.value("M12", 10.0); // 流度比 x(2)
+
+    // 尺寸参数 (有因次 -> 无因次处理)
+    double L = p.value("L", 1000.0);
+    double Lf = p.value("Lf", 100.0);
+    double rm = p.value("rm", 500.0); // 改造区半径 (m)
+    double re = p.value("re", 20000.0); // 外区半径 (m)
+
+    // 内部计算无因次量
     double LfD = 0.0;
+    if (L > 1e-9) LfD = Lf / L;
+
     double rmD = 0.0;
+    if (L > 1e-9) rmD = rm / L;
+
     double reD = 0.0;
+    if (L > 1e-9) reD = re / L;
 
-    if (L > 1e-9) {
-        LfD = Lf / L;
-        rmD = rm / L;
-        reD = re / L;
-    }
-
-    // 提取模型参数
-    double M12 = p.value("M12");       // 流度比
-    double eta12 = p.value("eta12");   // 导压系数比
-    double omga1 = p.value("omega1");  // 内区储容比
-    double omga2 = p.value("omega2");  // 外区储容比
-    double remda1 = p.value("lambda1"); // 内区窜流系数
-    double remda2 = p.value("lambda2"); // 外区窜流系数
+    // 双重介质参数
+    double omga1 = p.value("omega1", 0.4);   // 内区储容比 x(6)
+    double omga2 = p.value("omega2", 0.08);  // 外区储容比 x(7)
+    double remda1 = p.value("lambda1", 1e-3); // 内区窜流系数 x(8)
+    double remda2 = p.value("lambda2", 1e-4); // 外区窜流系数 x(9)
+    double eta12 = p.value("eta12", 0.2);    // 导压系数比 (新增)
 
     int nf = (int)p.value("nf", 4);
     if(nf < 1) nf = 1;
@@ -202,19 +207,20 @@ double ModelSolver01_06::flaplace_composite(double z, const QMap<QString, double
         for(int i=0; i<nf; ++i) xwD.append(start + i * step);
     }
 
-    // 计算 fs1 和 fs2 (基于 modelwidget1A.m 的双重孔隙介质公式)
+    // 计算 fs1, fs2 (根据 MATLAB 更新公式)
     // fs1 = (omga1*(1-omga1)*z + remda1)/((1-omga1)*z + remda1);
+    double term1_inner = (1.0 - omga1) * z + remda1;
+    double fs1 = 1.0;
+    if (std::abs(term1_inner) > 1e-12) {
+        fs1 = (omga1 * (1.0 - omga1) * z + remda1) / term1_inner;
+    }
+
     // fs2 = eta12*(omga2*(1-omga2)*eta12*z + remda2)/((1-omga2)*eta12*z + remda2);
-
-    double term_o1 = 1.0 - omga1;
-    double num1 = omga1 * term_o1 * z + remda1;
-    double den1 = term_o1 * z + remda1;
-    double fs1 = (std::abs(den1) > 1e-12) ? (num1 / den1) : num1;
-
-    double term_o2 = 1.0 - omga2;
-    double num2 = omga2 * term_o2 * eta12 * z + remda2;
-    double den2 = term_o2 * eta12 * z + remda2;
-    double fs2 = (std::abs(den2) > 1e-12) ? (eta12 * num2 / den2) : (eta12 * num2);
+    double term1_outer = (1.0 - omga2) * eta12 * z + remda2;
+    double fs2 = 1.0;
+    if (std::abs(term1_outer) > 1e-12) {
+        fs2 = eta12 * (omga2 * (1.0 - omga2) * eta12 * z + remda2) / term1_outer;
+    }
 
     // 计算不含井储的拉普拉斯空间压力
     double pf = PWD_composite(z, fs1, fs2, M12, LfD, rmD, reD, nf, xwD, m_type);
@@ -224,8 +230,11 @@ double ModelSolver01_06::flaplace_composite(double z, const QMap<QString, double
     if (hasStorage) {
         double CD = p.value("cD", 0.0);
         double S = p.value("S", 0.0);
+        // 公式: pf = (z*pf + S) / (z + CD*z^2*(z*pf + S))
         if (CD > 1e-12 || std::abs(S) > 1e-12) {
-            pf = (z * pf + S) / (z + CD * z * z * (z * pf + S));
+            double num = z * pf + S;
+            double den = z + CD * z * z * num;
+            if (std::abs(den) > 1e-100) pf = num / den;
         }
     }
 
@@ -236,30 +245,39 @@ double ModelSolver01_06::flaplace_composite(double z, const QMap<QString, double
 double ModelSolver01_06::PWD_composite(double z, double fs1, double fs2, double M12, double LfD, double rmD, double reD, int nf, const QVector<double>& xwD, ModelType type) {
     using namespace boost::math;
     QVector<double> ywD(nf, 0.0); // 假设裂缝在y方向无偏移
-
     double gama1 = sqrt(z * fs1);
     double gama2 = sqrt(z * fs2);
     double arg_g2_rm = gama2 * rmD;
     double arg_g1_rm = gama1 * rmD;
 
+    // 计算 Bessel 函数值
     double k0_g2 = cyl_bessel_k(0, arg_g2_rm);
     double k1_g2 = cyl_bessel_k(1, arg_g2_rm);
     double k0_g1 = cyl_bessel_k(0, arg_g1_rm);
     double k1_g1 = cyl_bessel_k(1, arg_g1_rm);
 
-    double term_mAB_i0 = 0.0;
-    double term_mAB_i1 = 0.0;
+    // 边界条件处理 mAB
+    // 模型 1,2: mAB = 0 (无限大)
+    // 模型 3,4: mAB = besselk(1,gama2*reD)/besseli(1,gama2*reD) (封闭)
+    // 模型 5,6: mAB = -besselk(0,gama2*reD)/besseli(0,gama2*reD) (定压)
+
+    // 注意：为了数值稳定性，我们使用 scaled Bessel 函数逻辑来组合
+    // 原始公式涉及 I(x) 和 K(x)，在大参数下直接计算会溢出。
+    // 我们需要构建类似于 mAB * I0(g2*rm) 的项。
 
     bool isInfinite = (type == Model_1 || type == Model_2);
     bool isClosed = (type == Model_3 || type == Model_4);
     bool isConstP = (type == Model_5 || type == Model_6);
 
-    // 边界条件处理 (计算 mAB 项)
-    if (!isInfinite) {
-        // 防止 reD 无效导致 Bessel K0(0) = Inf
-        if (reD <= 1e-5) return 0.0;
+    double term_mAB_i0 = 0.0; // 对应 mAB * I0(gama2 * rmD)
+    double term_mAB_i1 = 0.0; // 对应 mAB * I1(gama2 * rmD)
 
+    if (!isInfinite) {
+        if (reD <= 1e-5) return 0.0;
         double arg_re = gama2 * reD;
+
+        // 使用 scaled Bessel: I_s(x) = I(x) * exp(-x)
+        // I(x) = I_s(x) * exp(x)
         double i1_re_s = scaled_besseli(1, arg_re);
         double i0_re_s = scaled_besseli(0, arg_re);
         double k1_re = cyl_bessel_k(1, arg_re);
@@ -267,35 +285,40 @@ double ModelSolver01_06::PWD_composite(double z, double fs1, double fs2, double 
         double i0_g2_s = scaled_besseli(0, arg_g2_rm);
         double i1_g2_s = scaled_besseli(1, arg_g2_rm);
 
+        // 公共指数因子: exp(arg_g2_rm - arg_re)
+        double exp_factor = std::exp(arg_g2_rm - arg_re);
+
         if (isClosed) {
-            // mAB = K1(re) / I1(re)
+            // mAB = K1(re)/I1(re)
+            // term_i0 = (K1(re)/I1(re)) * I0(rm) = (K1(re) / (I1_s(re)*exp(re))) * (I0_s(rm)*exp(rm))
+            //         = (K1(re)/I1_s(re)) * I0_s(rm) * exp(rm - re)
             if (i1_re_s > 1e-100) {
-                term_mAB_i0 = (k1_re / i1_re_s) * i0_g2_s * std::exp(arg_g2_rm - arg_re);
-                term_mAB_i1 = (k1_re / i1_re_s) * i1_g2_s * std::exp(arg_g2_rm - arg_re);
+                term_mAB_i0 = (k1_re / i1_re_s) * i0_g2_s * exp_factor;
+                term_mAB_i1 = (k1_re / i1_re_s) * i1_g2_s * exp_factor;
             }
         } else if (isConstP) {
-            // mAB = -K0(re) / I0(re)
+            // mAB = -K0(re)/I0(re)
             if (i0_re_s > 1e-100) {
-                term_mAB_i0 = -(k0_re / i0_re_s) * i0_g2_s * std::exp(arg_g2_rm - arg_re);
-                term_mAB_i1 = -(k0_re / i0_re_s) * i1_g2_s * std::exp(arg_g2_rm - arg_re);
+                term_mAB_i0 = -(k0_re / i0_re_s) * i0_g2_s * exp_factor;
+                term_mAB_i1 = -(k0_re / i0_re_s) * i1_g2_s * exp_factor;
             }
         }
     }
 
-    // 构造 Ac 分子分母项
-    // term1 = mAB*I0(g2*rm) + K0(g2*rm)
-    // term2 = mAB*I1(g2*rm) - K1(g2*rm)
+    // 计算 Acup 和 Acdown (与旧代码结构一致，参数含义已更新)
+    // Acup = M12*gama1*besselk(1,gama1*rmD)*(mAB*besseli(0,gama2*rmD)+besselk(0,gama2*rmD))+gama2*besselk(0,gama1*rmD)*(mAB*besseli(1,gama2*rmD)-besselk(1,gama2*rmD));
+    // 对应 term1 = mAB*I0 + K0
+    // 对应 term2 = mAB*I1 - K1
     double term1 = term_mAB_i0 + k0_g2;
     double term2 = term_mAB_i1 - k1_g2;
 
-    // Acup = M12*g1*K1(g1*rm)*term1 + g2*K0(g1*rm)*term2
     double Acup = M12 * gama1 * k1_g1 * term1 + gama2 * k0_g1 * term2;
 
     double i1_g1_s = scaled_besseli(1, arg_g1_rm);
     double i0_g1_s = scaled_besseli(0, arg_g1_rm);
 
-    // Acdown = M12*g1*I1(g1*rm)*term1 - g2*I0(g1*rm)*term2
-    // 使用 scaled besseli 防止溢出
+    // Acdown (scaled)
+    // Acdown = M12*gama1*besseli(1,gama1*rmD)*(mAB*besseli(0,gama2*rmD)+besselk(0,gama2*rmD))-gama2*besseli(0,gama1*rmD)*(mAB*besseli(1,gama2*rmD)-besselk(1,gama2*rmD));
     double Acdown_scaled = M12 * gama1 * i1_g1_s * term1 - gama2 * i0_g1_s * term2;
 
     if (std::abs(Acdown_scaled) < 1e-100) Acdown_scaled = 1e-100;
@@ -307,7 +330,7 @@ double ModelSolver01_06::PWD_composite(double z, double fs1, double fs2, double 
     Eigen::MatrixXd A_mat(size, size);
     Eigen::VectorXd b_vec(size);
     b_vec.setZero();
-    b_vec(nf) = 1.0; // 定产条件: Sum(q_i) = 1
+    b_vec(nf) = 1.0; // 定产条件
 
     for (int i = 0; i < nf; ++i) {
         for (int j = 0; j < nf; ++j) {
@@ -319,6 +342,7 @@ double ModelSolver01_06::PWD_composite(double z, double fs1, double fs2, double 
                 double term2_val = 0.0;
                 double exponent = arg_dist - arg_g1_rm;
                 if (exponent > -700.0) {
+                    // Ac_prefactor 已经包含 scaling 因子，此处乘以 scaled I0(dist) * exp(...) 恢复
                     term2_val = Ac_prefactor * scaled_besseli(0, arg_dist) * std::exp(exponent);
                 }
                 return cyl_bessel_k(0, arg_dist) + term2_val;
@@ -329,7 +353,6 @@ double ModelSolver01_06::PWD_composite(double z, double fs1, double fs2, double 
         }
     }
     // 补充方程：各裂缝压力相等，流量和为1
-    // A(nf+1,:) = z;  A(:,nf+1) = -1;
     for (int i = 0; i < nf; ++i) {
         A_mat(i, nf) = -1.0;
         A_mat(nf, i) = z;
