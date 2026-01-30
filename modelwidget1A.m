@@ -2,8 +2,8 @@ function Dp = Composite_shale_oil_reservoir_fitfun(x,t)
 % Ver:2025-12-1
 % 2026-1-29:改fs1、fs2
 % -------------------
-x = [1e-2, 10, 1000, 20, 1200, 0.4, 0.08,  1e-3, 1e-4, 20000];
-t = logspace(-4,4,100);
+x = [1e-2, 10, 1000, 20, 1000, 0.4, 0.08,  1e-3, 1e-4, 20000];
+t = logspace(-3,4,100);
 clear global
 % -------------------
 global hDp hDp_der
@@ -30,12 +30,11 @@ xwD = linspace(-0.9,0.9,nf);  % 裂缝位置
 phi = 0.05;   % 基质孔隙度   
 h = 20;     % 有效厚度
 mu = 0.5;   % 粘度
-B = 1.05;   % 体积系数
+B = 1.2;   % 体积系数
 Ct = 5e-4;  % 综合压缩系数
 q = 5;      % 定产生产(m3/s)
 rw = 0.1;   % 井筒
-C  = 1e-7;  % 有因次井筒储存系数 (m3/MPa), 可作为输入或拟合参数
-S  = 0.01;
+
 
 % 无因次定义
 CD = 0.159*C/ ( phi  * h * Ct * rw^2); % 无因次 CD
@@ -47,7 +46,7 @@ reD = re/L;      % 无因次外区半径
 tD =  14.4*kf*t/(phi*mu*Ct*L^2);  % t = phi_m*mu*Ct*L^2*tD/(14.4*kf);
 PD=zeros(size(tD));
 
-N=4;
+N=6;
 % n = length(tD);
 for i=1:length(tD)
      PD(i)=0; 
