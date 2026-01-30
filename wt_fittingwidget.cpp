@@ -1,11 +1,12 @@
 /*
  * 文件名: wt_fittingwidget.cpp
  * 文件作用: 试井拟合分析主界面实现文件
+ * 修改记录:
+ * 1. [修复] onIterationUpdate 中增加重绘抽样点的逻辑，解决拟合时抽样点消失的问题。
  */
 
 #include "wt_fittingwidget.h"
 #include "ui_wt_fittingwidget.h"
-// ... (其他 include 保持不变，请确保包含所需的头文件)
 #include "modelparameter.h"
 #include "modelselect.h"
 #include "fittingdatadialog.h"
@@ -45,7 +46,7 @@ FittingWidget::FittingWidget(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    // [布局] ... (代码保持不变)
+    // [布局] 初始化
     if (ui->plotContainer->layout()) {
         QLayoutItem* item;
         while ((item = ui->plotContainer->layout()->takeAt(0)) != nullptr) {
@@ -166,7 +167,7 @@ void FittingWidget::layoutCharts()
     m_subWinSemiLog->setGeometry(w / 2, h / 2, w - (w / 2), h - (h / 2));
 }
 
-// [新增] 兼容性接口：调用完整接口并传入空 rawP
+// 兼容性接口：调用完整接口并传入空 rawP
 void FittingWidget::setObservedData(const QVector<double>& t, const QVector<double>& deltaP, const QVector<double>& d)
 {
     setObservedData(t, deltaP, d, QVector<double>());
@@ -471,6 +472,7 @@ void FittingWidget::updateModelCurve(const QMap<QString, double>* explicitParams
     }
 }
 
+// [核心修改] 迭代更新时重绘抽样点
 void FittingWidget::onIterationUpdate(double err, const QMap<QString,double>& p,
                                       const QVector<double>& t, const QVector<double>& p_curve, const QVector<double>& d_curve) {
     ui->label_Error->setText(QString("误差(MSE): %1").arg(err, 0, 'e', 3));
@@ -484,7 +486,18 @@ void FittingWidget::onIterationUpdate(double err, const QMap<QString,double>& p,
         }
     }
     ui->tableParams->blockSignals(false);
+
+    // plotAll 会清空整个图表，必须在此之后重绘抽样点
     m_chartManager->plotAll(t, p_curve, d_curve, true);
+
+    // [Fix] 检查是否开启了抽样，如果开启则补画抽样点
+    if (m_isCustomSamplingEnabled && m_core) {
+        QVector<double> sampleT, sampleP, sampleD;
+        m_core->getLogSampledData(m_obsTime, m_obsDeltaP, m_obsDerivative, sampleT, sampleP, sampleD);
+        m_chartManager->plotSampledPoints(sampleT, sampleP, sampleD);
+        // 需要再次 replot 确保抽样点显示 (plotSampledPoints 内部只是 addGraph)
+        if(m_plotLogLog) m_plotLogLog->replot();
+    }
 }
 
 void FittingWidget::onFitFinished() {
@@ -818,3 +831,4 @@ QVector<double> FittingWidget::parseSensitivityValues(const QString& text) {
     }
     return values;
 }
+

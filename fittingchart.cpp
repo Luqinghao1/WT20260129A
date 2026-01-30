@@ -1,10 +1,9 @@
 /*
  * 文件名: fittingchart.cpp
  * 文件作用: 拟合绘图管理类实现文件
- * 功能描述:
- * 1. 实现 LogLog, SemiLog, Cartesian 三个图表的绘制逻辑。
- * 2. 针对压力恢复试井，实现 Horner Plot (P vs lg((tp+dt)/dt)) 绘制与线性拟合。
- * 3. 自动计算初始地层压力并在图表上显示。
+ * 修改记录:
+ * 1. [优化] LogLog 和 SemiLog 图表的对数坐标轴默认开启科学计数法显示 ("eb" 格式)。
+ * 2. [健壮性] 在切换不同图表模式（如Horner与Drawdown）时，显式重置坐标轴格式，防止格式残留。
  */
 
 #include "fittingchart.h"
@@ -101,11 +100,17 @@ void FittingChart::plotLogLog(const QVector<double>& tm, const QVector<double>& 
         plot->graph(3)->setName("理论导数");
     }
 
-    // 3. 设置坐标轴范围
+    // 3. 设置坐标轴范围与格式
     plot->xAxis->setLabel("时间 Time (h)");
     plot->yAxis->setLabel("压差 & 导数 (MPa)");
+
+    // [修改] 双对数坐标系：X轴和Y轴均设为对数，并启用科学计数法
     plot->xAxis->setScaleType(QCPAxis::stLogarithmic);
+    plot->xAxis->setNumberFormat("eb"); // 科学计数法 (Exponential/Beautiful)
+
     plot->yAxis->setScaleType(QCPAxis::stLogarithmic);
+    plot->yAxis->setNumberFormat("eb"); // 科学计数法
+
     plot->rescaleAxes();
     // 稍微扩展范围
     plot->xAxis->scaleRange(1.1, plot->xAxis->range().center());
@@ -150,15 +155,13 @@ void FittingChart::plotSemiLog(const QVector<double>& tm, const QVector<double>&
         // 计算并绘制拟合直线
         m_calculatedPi = calculateHornerPressure();
         if (m_calculatedPi > 0) {
-            // [修复] 移除了未使用的 minX, maxX, lastX 变量
             if (!hornerX.isEmpty()) {
                 double startX = hornerX.first(); // 早期时间，X大
 
                 // 为了画线，取两端
                 QVector<double> lineX, lineY;
                 lineX << startX << 0.0;
-                // 斜率 m = (Y - Pi) / X
-                // Y = mX + Pi
+
                 // 简单拟合用于绘图
                 int nPoints = hornerX.size();
                 if (nPoints > 2) {
@@ -166,8 +169,6 @@ void FittingChart::plotSemiLog(const QVector<double>& tm, const QVector<double>&
                     double x2 = hornerX[nPoints/2]; double y2 = hornerY[nPoints/2]; // 中间点
                     if (std::abs(x1-x2) > 1e-6) {
                         double m = (y1 - y2) / (x1 - x2);
-                        // Y(0) = Pi
-                        // Y(startX) = m * startX + Pi
                         lineY << (m * startX + m_calculatedPi) << m_calculatedPi;
                     } else {
                         lineY << hornerY.first() << m_calculatedPi;
@@ -185,8 +186,15 @@ void FittingChart::plotSemiLog(const QVector<double>& tm, const QVector<double>&
 
         plot->xAxis->setLabel("Horner 时间比 lg((tp+dt)/dt)");
         plot->yAxis->setLabel("地层压力 P (MPa)");
-        plot->xAxis->setScaleType(QCPAxis::stLinear); // 因为我们手动取了 log10
+
+        // [修改] Horner 图 X轴是线性刻度（代表指数），Y轴是线性压力
+        // 重置为普通格式，避免科学计数法显示 1e0, 2e0 等
+        plot->xAxis->setScaleType(QCPAxis::stLinear);
+        plot->xAxis->setNumberFormat("gb");
+
         plot->yAxis->setScaleType(QCPAxis::stLinear);
+        plot->yAxis->setNumberFormat("gb");
+
         plot->xAxis->setRangeReversed(true); // Horner 图习惯 X 轴从大到小
         plot->rescaleAxes();
         // 确保能看到 X=0
@@ -194,7 +202,7 @@ void FittingChart::plotSemiLog(const QVector<double>& tm, const QVector<double>&
         plot->xAxis->setRange(upperX, 0.0);
 
     } else {
-        // === 压力降落 (原逻辑) ===
+        // === 压力降落 (Drawdown) ===
         QVector<double> vt, vp;
         for(int i=0; i<m_obsT.size(); ++i) {
             if(m_obsT[i] > 1e-10) {
@@ -225,8 +233,14 @@ void FittingChart::plotSemiLog(const QVector<double>& tm, const QVector<double>&
 
         plot->xAxis->setLabel("时间 Time (h)");
         plot->yAxis->setLabel("压差 Delta P (MPa)");
+
+        // [修改] 半对数(降落)：X轴对数且科学计数，Y轴线性普通格式
         plot->xAxis->setScaleType(QCPAxis::stLogarithmic);
+        plot->xAxis->setNumberFormat("eb"); // 科学计数法
+
         plot->yAxis->setScaleType(QCPAxis::stLinear);
+        plot->yAxis->setNumberFormat("gb"); // 普通格式
+
         plot->xAxis->setRangeReversed(false);
         plot->rescaleAxes();
     }
@@ -265,8 +279,14 @@ void FittingChart::plotCartesian(const QVector<double>& tm, const QVector<double
 
     plot->xAxis->setLabel("时间 Time (h)");
     plot->yAxis->setLabel("压差 Delta P (MPa)");
+
+    // [修改] 笛卡尔图：双线性，使用普通格式
     plot->xAxis->setScaleType(QCPAxis::stLinear);
+    plot->xAxis->setNumberFormat("gb");
+
     plot->yAxis->setScaleType(QCPAxis::stLinear);
+    plot->yAxis->setNumberFormat("gb");
+
     plot->rescaleAxes();
 }
 
