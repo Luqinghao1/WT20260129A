@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1200</width>
-    <height>813</height>
+    <height>850</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -191,77 +191,88 @@ QLabel {
            <widget class="QLineEdit" name="hEdit"/>
           </item>
           <item row="2" column="0">
+           <widget class="QLabel" name="label_rw">
+            <property name="text">
+             <string>井筒半径 r&lt;sub&gt;w&lt;/sub&gt; (m):</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="rwEdit"/>
+          </item>
+
+          <item row="3" column="0">
            <widget class="QLabel" name="label_mu">
             <property name="text">
              <string>粘度 μ (mPa·s):</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
+          <item row="3" column="1">
            <widget class="QLineEdit" name="muEdit"/>
           </item>
-          <item row="3" column="0">
+          <item row="4" column="0">
            <widget class="QLabel" name="label_B">
             <property name="text">
              <string>体积系数 B:</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="1">
+          <item row="4" column="1">
            <widget class="QLineEdit" name="BEdit"/>
           </item>
-          <item row="4" column="0">
+          <item row="5" column="0">
            <widget class="QLabel" name="label_Ct">
             <property name="text">
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;压缩系数 C&lt;sub&gt;t&lt;/sub&gt; (MPa⁻¹):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="1">
+          <item row="5" column="1">
            <widget class="QLineEdit" name="CtEdit"/>
           </item>
-          <item row="5" column="0">
+          <item row="6" column="0">
            <widget class="QLabel" name="label_q">
             <property name="text">
              <string>产量 q (m³/d):</string>
             </property>
            </widget>
           </item>
-          <item row="5" column="1">
+          <item row="6" column="1">
            <widget class="QLineEdit" name="qEdit"/>
           </item>
-          <item row="6" column="0">
+          <item row="7" column="0">
            <widget class="QLabel" name="label_t">
             <property name="text">
              <string>测试时长 (h):</string>
             </property>
            </widget>
           </item>
-          <item row="6" column="1">
+          <item row="7" column="1">
            <widget class="QLineEdit" name="tEdit"/>
           </item>
-          <item row="7" column="0">
+          <item row="8" column="0">
            <widget class="QLabel" name="label_points">
             <property name="text">
              <string>数据点数:</string>
             </property>
            </widget>
           </item>
-          <item row="7" column="1">
+          <item row="8" column="1">
            <widget class="QLineEdit" name="pointsEdit">
             <property name="placeholderText">
              <string>默认50</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="0">
+          <item row="9" column="0">
            <widget class="QLabel" name="label_showPoints">
             <property name="text">
              <string>图表显示:</string>
             </property>
            </widget>
           </item>
-          <item row="8" column="1">
+          <item row="9" column="1">
            <widget class="QCheckBox" name="checkShowPoints">
             <property name="text">
              <string>显示数据点</string>
@@ -280,26 +291,25 @@ QLabel {
           <item row="0" column="0">
            <widget class="QLabel" name="label_kf">
             <property name="text">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;内区渗透率 k&lt;span style=&quot; vertical-align:sub;&quot;&gt;f&lt;/span&gt; (mD):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;内区渗透率 k&lt;sub&gt;f&lt;/sub&gt; (D):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="0" column="1">
            <widget class="QLineEdit" name="kfEdit"/>
           </item>
+
           <item row="1" column="0">
-           <widget class="QLabel" name="label_M12">
+           <widget class="QLabel" name="label_km">
             <property name="text">
-             <string>流度比 M12:</string>
-            </property>
-            <property name="toolTip">
-             <string>M12 = (kf/uf) / (km/um)</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;流度比 M&lt;sub&gt;12&lt;/sub&gt;:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="1" column="1">
-           <widget class="QLineEdit" name="M12Edit"/>
+           <widget class="QLineEdit" name="kmEdit"/>
           </item>
+
           <item row="2" column="0">
            <widget class="QLabel" name="label_eta12">
             <property name="text">
@@ -321,6 +331,7 @@ QLabel {
           <item row="3" column="1">
            <widget class="QLineEdit" name="LEdit"/>
           </item>
+
           <item row="4" column="0">
            <widget class="QLabel" name="label_Lf">
             <property name="text">
@@ -331,6 +342,7 @@ QLabel {
           <item row="4" column="1">
            <widget class="QLineEdit" name="LfEdit"/>
           </item>
+
           <item row="5" column="0">
            <widget class="QLabel" name="label_nf">
             <property name="text">
@@ -343,24 +355,25 @@ QLabel {
           </item>
 
           <item row="6" column="0">
-           <widget class="QLabel" name="label_rm">
+           <widget class="QLabel" name="label_rmD">
             <property name="text">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;改造半径 r&lt;sub&gt;m&lt;/sub&gt; (m):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;复合半径 r&lt;sub&gt;m&lt;/sub&gt; (m):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="6" column="1">
-           <widget class="QLineEdit" name="rmEdit"/>
+           <widget class="QLineEdit" name="rmDEdit"/>
           </item>
+
           <item row="7" column="0">
-           <widget class="QLabel" name="label_re">
+           <widget class="QLabel" name="label_reD">
             <property name="text">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;外边界半径 r&lt;sub&gt;e&lt;/sub&gt; (m):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;外区半径 r&lt;sub&gt;e&lt;/sub&gt; (m):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="7" column="1">
-           <widget class="QLineEdit" name="reEdit"/>
+           <widget class="QLineEdit" name="reDEdit"/>
           </item>
 
           <item row="8" column="0">
@@ -373,6 +386,7 @@ QLabel {
           <item row="8" column="1">
            <widget class="QLineEdit" name="omga1Edit"/>
           </item>
+
           <item row="9" column="0">
            <widget class="QLabel" name="label_omga2">
             <property name="text">
@@ -385,24 +399,25 @@ QLabel {
           </item>
 
           <item row="10" column="0">
-           <widget class="QLabel" name="label_lambda1">
+           <widget class="QLabel" name="label_remda1">
             <property name="text">
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;内区窜流系数 λ&lt;sub&gt;1&lt;/sub&gt;:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="10" column="1">
-           <widget class="QLineEdit" name="lambda1Edit"/>
+           <widget class="QLineEdit" name="remda1Edit"/>
           </item>
+
           <item row="11" column="0">
-           <widget class="QLabel" name="label_lambda2">
+           <widget class="QLabel" name="label_remda2">
             <property name="text">
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;外区窜流系数 λ&lt;sub&gt;2&lt;/sub&gt;:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="11" column="1">
-           <widget class="QLineEdit" name="lambda2Edit"/>
+           <widget class="QLineEdit" name="remda2Edit"/>
           </item>
 
           <item row="12" column="0">
@@ -411,8 +426,7 @@ QLabel {
              <string>渗透率模量</string>
             </property>
             <property name="styleSheet">
-             <string notr="true">color: blue;
-font-weight: bold;</string>
+             <string notr="true">color: blue; font-weight: bold;</string>
             </property>
             <property name="text">
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;压敏系数 γ&lt;sub&gt;D&lt;/sub&gt;:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -422,16 +436,18 @@ font-weight: bold;</string>
           <item row="12" column="1">
            <widget class="QLineEdit" name="gamaDEdit"/>
           </item>
+
           <item row="13" column="0">
            <widget class="QLabel" name="label_cD">
             <property name="text">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;井筒储集 C&lt;sub&gt;D&lt;/sub&gt;:&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;井筒储集 C (m³/MPa):&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
           </item>
           <item row="13" column="1">
            <widget class="QLineEdit" name="cDEdit"/>
           </item>
+
           <item row="14" column="0">
            <widget class="QLabel" name="label_s">
             <property name="text">
@@ -466,8 +482,7 @@ font-weight: bold;</string>
          <item>
           <widget class="QPushButton" name="calculateButton">
            <property name="styleSheet">
-            <string notr="true">background-color: #4CAF50;
-color: white; font-weight: bold; padding: 6px;</string>
+             <string notr="true">background-color: #4CAF50; color: white; font-weight: bold; padding: 6px;</string>
            </property>
            <property name="text">
             <string>开始计算</string>
@@ -487,10 +502,7 @@ color: white; font-weight: bold; padding: 6px;</string>
      </widget>
      <widget class="QWidget" name="rightPanel" native="true">
       <property name="styleSheet">
-       <string notr="true">QWidget#rightPanel {
-        background-color: white;
-        border: none;
-}</string>
+       <string notr="true">QWidget#rightPanel { background-color: white; border: none; }</string>
       </property>
       <layout class="QVBoxLayout" name="rightLayout">
        <property name="leftMargin">
@@ -508,13 +520,10 @@ color: white; font-weight: bold; padding: 6px;</string>
        <item>
         <widget class="QTabWidget" name="tabWidget_Right">
          <property name="styleSheet">
-          <string notr="true">QTabWidget::pane { border: none;
-} /* 去除标签页下方的横线 */
-QTabBar::tab { background: #f0f0f0; color: #333333; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; margin-right: 2px;
-}
+          <string notr="true">QTabWidget::pane { border: none; } /* 去除标签页下方的横线 */
+QTabBar::tab { background: #f0f0f0; color: #333333; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; margin-right: 2px; }
 QTabBar::tab:hover { background-color: #e0e0e0; }
-QTabBar::tab:selected { background: white; color: #0078d7; border-bottom: 2px solid #0078d7; font-weight: bold;
-}</string>
+QTabBar::tab:selected { background: white; color: #0078d7; border-bottom: 2px solid #0078d7; font-weight: bold; }</string>
          </property>
          <property name="currentIndex">
           <number>0</number>

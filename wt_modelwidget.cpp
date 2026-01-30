@@ -3,9 +3,10 @@
  * 文件作用: 压裂水平井复合页岩油模型界面类实现 (View/Controller)
  * 功能描述:
  * 1. 初始化界面布局和图表配置。
- * 2. 响应用户操作，收集有因次物理参数，调用 ModelSolver01_06 进行计算。
- * 3. 实现了新参数输入逻辑：流度比(M12)、导压系数比(eta12)、外区窜流系数(lambda2)等。
- * 4. 移除了无因次裂缝长度(LfD)的相关 UI 逻辑。
+ * 2. 动态调整界面控件 (添加 remda2, eta12; 重命名 rmD->rm, km->M12 等)。
+ * 3. 响应用户操作，收集界面参数。
+ * 4. [修正] 读取 rw 参数，并用于 C -> cD 的无因次转换。
+ * 5. 调用 ModelSolver01_06 进行计算并将结果绘制在 QCustomPlot 图表上。
  */
 
 #include "wt_modelwidget.h"
@@ -20,8 +21,10 @@
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QSplitter>
-#include <QLineEdit>
 #include <QLabel>
+#include <QLineEdit>
+#include <QGridLayout>
+#include <cmath>
 
 WT_ModelWidget::WT_ModelWidget(ModelType type, QWidget *parent)
     : QWidget(parent)
@@ -34,20 +37,23 @@ WT_ModelWidget::WT_ModelWidget(ModelType type, QWidget *parent)
     // 初始化求解器
     m_solver = new ModelSolver01_06(m_type);
 
+    // 初始化曲线颜色列表
     m_colorList = { Qt::red, Qt::blue, QColor(0,180,0), Qt::magenta, QColor(255,140,0), Qt::cyan };
 
-    // [布局] 设置 Splitter 初始比例 (左 280 : 右 920)
+    // 设置 Splitter 初始比例 (左 20% : 右 80%)
     QList<int> sizes;
-    sizes << 280 << 920;
+    sizes << 240 << 960;
     ui->splitter->setSizes(sizes);
     ui->splitter->setCollapsible(0, false); // 左侧不可折叠
 
-    // [界面] 设置当前模型名称到选择按钮
+    // 设置当前模型名称到选择按钮
     ui->btnSelectModel->setText(getModelName() + "  (点击切换)");
 
     initUi();
     initChart();
     setupConnections();
+
+    // 初始化参数显示
     onResetParameters();
 }
 
@@ -79,29 +85,51 @@ void WT_ModelWidget::setHighPrecision(bool high)
 void WT_ModelWidget::initUi() {
     using MT = ModelSolver01_06::ModelType;
 
-    // 1. 设置边界半径输入框的可见性
-    // 无限大边界模型不需要外边界半径 re
-    if (m_type == MT::Model_1 || m_type == MT::Model_2) {
-        ui->label_re->setVisible(false);
-        ui->reEdit->setVisible(false);
+    // 1. 标签文本更新 (复用旧控件名，但在界面上显示新含义)
+    if(ui->label_km) ui->label_km->setText("流度比 M12"); // kmEdit -> M12
+    if(ui->label_rmD) ui->label_rmD->setText("复合半径 rm (m)"); // rmDEdit -> rm
+    if(ui->label_reD) ui->label_reD->setText("外区半径 re (m)"); // reDEdit -> re
+    if(ui->label_cD) ui->label_cD->setText("井筒储集 C (m³/MPa)"); // cDEdit -> C (有因次)
+
+    // 2. 控制边界参数可见性 (无限大模型隐藏外边界)
+    bool isInfinite = (m_type == MT::Model_1 || m_type == MT::Model_2);
+    if (isInfinite) {
+        ui->label_reD->setVisible(false);
+        ui->reDEdit->setVisible(false);
     } else {
-        ui->label_re->setVisible(true);
-        ui->reEdit->setVisible(true);
+        ui->label_reD->setVisible(true);
+        ui->reDEdit->setVisible(true);
     }
 
-    // 2. 设置井储表皮输入框的可见性
-    // 恒定井储模型不需要输入变井储参数?
-    // 通常 Model 1,3,5 是变井储，Model 2,4,6 是恒定井储。
-    // 但此处逻辑保留原代码意图：只要是变井储模型，就显示 CD 和 S
+    // 3. 控制井储表皮可见性
     bool hasStorage = (m_type == MT::Model_1 || m_type == MT::Model_3 || m_type == MT::Model_5);
-
-    // 实际上通常所有试井模型都需要 CD 和 S，如果是"变井储"可能指井储系数随时间变化，
-    // 或者此处意为区分"包含井储表皮"和"不包含"。
-    // 这里保持原逻辑，如果需要调整请说明。
     ui->label_cD->setVisible(hasStorage);
     ui->cDEdit->setVisible(hasStorage);
     ui->label_s->setVisible(hasStorage);
     ui->sEdit->setVisible(hasStorage);
+
+    // 4. 动态添加新参数输入框 (remda2, eta12)
+    QWidget* parentWidget = ui->remda1Edit->parentWidget();
+    QGridLayout* layout = qobject_cast<QGridLayout*>(parentWidget->layout());
+
+    if (layout) {
+        if (!parentWidget->findChild<QLineEdit*>("remda2Edit")) {
+            QLabel* labelRemda2 = new QLabel("外区窜流系数 λ<sub>2</sub>:", parentWidget);
+            QLineEdit* editRemda2 = new QLineEdit(parentWidget);
+            editRemda2->setObjectName("remda2Edit");
+
+            QLabel* labelEta12 = new QLabel("导压系数比 η<sub>12</sub>:", parentWidget);
+            QLineEdit* editEta12 = new QLineEdit(parentWidget);
+            editEta12->setObjectName("eta12Edit");
+
+            int row = layout->rowCount();
+            layout->addWidget(labelRemda2, row, 0);
+            layout->addWidget(editRemda2, row, 1);
+
+            layout->addWidget(labelEta12, row + 1, 0);
+            layout->addWidget(editEta12, row + 1, 1);
+        }
+    }
 }
 
 void WT_ModelWidget::initChart() {
@@ -110,6 +138,7 @@ void WT_ModelWidget::initChart() {
     plot->setBackground(Qt::white);
     plot->axisRect()->setBackground(Qt::white);
 
+    // 设置对数坐标轴
     QSharedPointer<QCPAxisTickerLog> logTicker(new QCPAxisTickerLog);
     plot->xAxis->setScaleType(QCPAxis::stLogarithmic); plot->xAxis->setTicker(logTicker);
     plot->yAxis->setScaleType(QCPAxis::stLogarithmic); plot->yAxis->setTicker(logTicker);
@@ -152,10 +181,6 @@ void WT_ModelWidget::setupConnections() {
     connect(ui->chartWidget, &ChartWidget::exportDataTriggered, this, &WT_ModelWidget::onExportData);
     connect(ui->btnExportDataTab, &QPushButton::clicked, this, &WT_ModelWidget::onExportData);
 
-    // LfD 已经从界面移除，不需要联动连接
-    // connect(ui->LEdit, &QLineEdit::editingFinished, this, &WT_ModelWidget::onDependentParamsChanged);
-    // connect(ui->LfEdit, &QLineEdit::editingFinished, this, &WT_ModelWidget::onDependentParamsChanged);
-
     connect(ui->checkShowPoints, &QCheckBox::toggled, this, &WT_ModelWidget::onShowPointsToggled);
 
     // 转发模型选择按钮信号
@@ -186,9 +211,10 @@ void WT_ModelWidget::onResetParameters() {
     using MT = ModelSolver01_06::ModelType;
     ModelParameter* mp = ModelParameter::instance();
 
-    // 基础参数
+    // 1. 基础参数
     setInputText(ui->phiEdit, mp->getPhi());
     setInputText(ui->hEdit, mp->getH());
+    setInputText(ui->rwEdit, 0.1); // [新增] 井筒半径默认 0.1m
     setInputText(ui->muEdit, mp->getMu());
     setInputText(ui->BEdit, mp->getB());
     setInputText(ui->CtEdit, mp->getCt());
@@ -197,41 +223,47 @@ void WT_ModelWidget::onResetParameters() {
     setInputText(ui->tEdit, 1000.0);
     setInputText(ui->pointsEdit, 100);
 
-    // 模型特定参数
-    setInputText(ui->kfEdit, 1e-2);
-    setInputText(ui->M12Edit, 10.0);  // 流度比 M12
+    // 2. 模型参数默认值
+    setInputText(ui->kfEdit, 1e-2); // 内区渗透率
+    setInputText(ui->kmEdit, 10.0); // 流度比 M12
 
-    setInputText(ui->LEdit, 1000.0);
-    setInputText(ui->LfEdit, 20.0);
-    setInputText(ui->nfEdit, 4);
+    double valL = 1000.0;
+    setInputText(ui->LEdit, valL);  // 水平井长 L
+    setInputText(ui->LfEdit, 20.0); // 裂缝半长 Lf
+    setInputText(ui->nfEdit, 4);    // 裂缝条数
 
-    setInputText(ui->rmEdit, 500.0); // 改造半径
+    // [逻辑更新] 复合半径 rm 默认值设为与 L 一致
+    setInputText(ui->rmDEdit, valL);
 
     setInputText(ui->omga1Edit, 0.4);
     setInputText(ui->omga2Edit, 0.08);
-    setInputText(ui->lambda1Edit, 1e-3);
+    setInputText(ui->remda1Edit, 1e-3);
 
-    // 新增参数
-    setInputText(ui->lambda2Edit, 1e-4);
-    setInputText(ui->eta12Edit, 0.2);
+    // 动态控件参数
+    QLineEdit* editRemda2 = this->findChild<QLineEdit*>("remda2Edit");
+    if(editRemda2) setInputText(editRemda2, 1e-4);
 
-    setInputText(ui->gamaDEdit, 0.0); // 压敏默认为0
+    QLineEdit* editEta12 = this->findChild<QLineEdit*>("eta12Edit");
+    if(editEta12) setInputText(editEta12, 0.2);
 
+    setInputText(ui->gamaDEdit, 0.02);
+
+    // 边界参数
     bool isInfinite = (m_type == MT::Model_1 || m_type == MT::Model_2);
     if (!isInfinite) {
-        setInputText(ui->reEdit, 20000.0); // 外边界半径
+        setInputText(ui->reDEdit, 20000.0); // 外边界 re
     }
 
+    // 井储表皮
     bool hasStorage = (m_type == MT::Model_1 || m_type == MT::Model_3 || m_type == MT::Model_5);
     if (hasStorage) {
-        setInputText(ui->cDEdit, 0.01);
-        setInputText(ui->sEdit, 0.0);
+        setInputText(ui->cDEdit, 0.1); // 有因次 C (m3/MPa)
+        setInputText(ui->sEdit, 0.01);
     }
 }
 
-// LfD 联动逻辑已移除
 void WT_ModelWidget::onDependentParamsChanged() {
-    // 空函数，保留接口以防后续需要其他联动
+    // 控件已移除，保留空实现
 }
 
 void WT_ModelWidget::onShowPointsToggled(bool checked) {
@@ -259,9 +291,10 @@ void WT_ModelWidget::runCalculation() {
     // 收集界面输入参数
     QMap<QString, QVector<double>> rawParams;
 
-    // 基础物性
+    // 基础参数
     rawParams["phi"] = parseInput(ui->phiEdit->text());
     rawParams["h"] = parseInput(ui->hEdit->text());
+    rawParams["rw"] = parseInput(ui->rwEdit->text()); // [新增] 读取 rw
     rawParams["mu"] = parseInput(ui->muEdit->text());
     rawParams["B"] = parseInput(ui->BEdit->text());
     rawParams["Ct"] = parseInput(ui->CtEdit->text());
@@ -270,33 +303,56 @@ void WT_ModelWidget::runCalculation() {
 
     // 模型参数
     rawParams["kf"] = parseInput(ui->kfEdit->text());
-    rawParams["M12"] = parseInput(ui->M12Edit->text());
+    rawParams["M12"] = parseInput(ui->kmEdit->text());
     rawParams["L"] = parseInput(ui->LEdit->text());
     rawParams["Lf"] = parseInput(ui->LfEdit->text());
     rawParams["nf"] = parseInput(ui->nfEdit->text());
-    rawParams["rm"] = parseInput(ui->rmEdit->text());
-
+    rawParams["rm"] = parseInput(ui->rmDEdit->text());
     rawParams["omega1"] = parseInput(ui->omga1Edit->text());
     rawParams["omega2"] = parseInput(ui->omga2Edit->text());
-    rawParams["lambda1"] = parseInput(ui->lambda1Edit->text());
+    rawParams["lambda1"] = parseInput(ui->remda1Edit->text());
     rawParams["gamaD"] = parseInput(ui->gamaDEdit->text());
 
-    // 获取新参数 (lambda2, eta12) - 直接从 UI 获取
-    rawParams["lambda2"] = parseInput(ui->lambda2Edit->text());
-    rawParams["eta12"] = parseInput(ui->eta12Edit->text());
+    QLineEdit* editRemda2 = this->findChild<QLineEdit*>("remda2Edit");
+    if(editRemda2) rawParams["lambda2"] = parseInput(editRemda2->text());
+    else rawParams["lambda2"] = {1e-4};
 
-    if (ui->reEdit->isVisible()) rawParams["re"] = parseInput(ui->reEdit->text());
-    else rawParams["re"] = {0.0};
+    QLineEdit* editEta12 = this->findChild<QLineEdit*>("eta12Edit");
+    if(editEta12) rawParams["eta12"] = parseInput(editEta12->text());
+    else rawParams["eta12"] = {0.2};
 
+    if (ui->reDEdit->isVisible()) rawParams["re"] = parseInput(ui->reDEdit->text());
+    else rawParams["re"] = {20000.0};
+
+    // 井储参数处理 (C -> cD 转换)
     if (ui->cDEdit->isVisible()) {
-        rawParams["cD"] = parseInput(ui->cDEdit->text());
+        QVector<double> C_vals = parseInput(ui->cDEdit->text());
+        QVector<double> cD_vals;
+
+        // [重要修正] CD = 0.159 * C / (phi * h * Ct * rw^2)
+        // 使用界面输入的 rw
+
+        double phi = rawParams["phi"].isEmpty() ? 0.05 : rawParams["phi"].first();
+        double Ct = rawParams["Ct"].isEmpty() ? 5e-4 : rawParams["Ct"].first();
+        double h = rawParams["h"].isEmpty() ? 20.0 : rawParams["h"].first();
+        double rw = rawParams["rw"].isEmpty() ? 0.1 : rawParams["rw"].first();
+
+        double denom = phi * h * Ct * rw * rw;
+        double factor = 0.0;
+        if (denom > 1e-20) factor = 0.159 / denom;
+
+        for(double valC : C_vals) {
+            cD_vals.append(valC * factor);
+        }
+
+        rawParams["cD"] = cD_vals;
         rawParams["S"] = parseInput(ui->sEdit->text());
     } else {
         rawParams["cD"] = {0.0};
         rawParams["S"] = {0.0};
     }
 
-    // 检查敏感性参数 (多值)
+    // 敏感性分析检查
     QString sensitivityKey = "";
     QVector<double> sensitivityValues;
     for(auto it = rawParams.begin(); it != rawParams.end(); ++it) {
@@ -309,12 +365,16 @@ void WT_ModelWidget::runCalculation() {
     }
     bool isSensitivity = !sensitivityKey.isEmpty();
 
-    // 构建基础参数字典
+    // 构建基础参数字典 (取第一个值)
     QMap<QString, double> baseParams;
     for(auto it = rawParams.begin(); it != rawParams.end(); ++it) {
         baseParams[it.key()] = it.value().isEmpty() ? 0.0 : it.value().first();
     }
     baseParams["N"] = m_highPrecision ? 8.0 : 4.0;
+
+    // [逻辑] 内部计算 LfD
+    if(baseParams["L"] > 1e-9) baseParams["LfD"] = baseParams["Lf"] / baseParams["L"];
+    else baseParams["LfD"] = 0.0;
 
     // 生成时间序列
     int nPoints = ui->pointsEdit->text().toInt();
@@ -329,16 +389,20 @@ void WT_ModelWidget::runCalculation() {
     QString resultTextHeader = QString("计算完成 (%1)\n").arg(getModelName());
     if(isSensitivity) resultTextHeader += QString("敏感性参数: %1\n").arg(sensitivityKey);
 
-    // 循环计算曲线
+    // 循环计算
     for(int i = 0; i < iterations; ++i) {
         QMap<QString, double> currentParams = baseParams;
         double val = 0;
         if (isSensitivity) {
             val = sensitivityValues[i];
             currentParams[sensitivityKey] = val;
+
+            // 联动更新 LfD
+            if (sensitivityKey == "L" || sensitivityKey == "Lf") {
+                if(currentParams["L"] > 1e-9) currentParams["LfD"] = currentParams["Lf"] / currentParams["L"];
+            }
         }
 
-        // 调用 Solver 计算
         ModelCurveData res = calculateTheoreticalCurve(currentParams, t);
 
         res_tD = std::get<0>(res);
@@ -353,7 +417,7 @@ void WT_ModelWidget::runCalculation() {
         plotCurve(res, legendName, curveColor, isSensitivity);
     }
 
-    // 更新结果文本
+    // 更新结果
     QString resultText = resultTextHeader;
     resultText += "t(h)\t\tDp(MPa)\t\tdDp(MPa)\n";
     for(int i=0; i<res_pD.size(); ++i) {
